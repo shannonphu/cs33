@@ -1,0 +1,27 @@
+12.18
+A. unsafe
+B. safe
+C. unsafe
+
+12.24
+The definition of reentrant is that multiple instances of a function call in one
+thread won't collide. Of the RIO package, there are 4 functions introduced:
+
+ssize_t rio_readn(int fd, void *usrbuf, size_t n); (unbuffered)
+ssize_t rio_writen(int fd, void *usrbuf, size_t n); (unbuffered)
+void rio_readinitb(rio_t *rp, int fd); (buffered)
+ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen); (buffered)
+ssize_t rio_readnb(rio_t *rp, void *usrbuf, size_t n); (buffered)
+
+The unbufferred functions are reentrant because in their description it says these
+functions can be interleaved artibrarily on the same descriptor and if interrupted
+will be restarted by the function. This means that collisions will not occur for
+bufferred RIO functions.
+
+As for bufferred, the functions are also reentrant because these functions' calls
+can be arbitrarily interweaved in their descriptor. This means they can be called
+at separate, arbitrary times and they won't affect each others' performance.
+
+
+
+

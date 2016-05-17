@@ -1,0 +1,43 @@
+2.88 
+A. 
+The expression always yields 1 because when casting to float from the int and double, the same amount of precision is lost in both x and dx so the resulting value will be equal.
+
+B.
+The expression is not always 1. If taking the difference between INT_MAX and INT_MIN(negative), for type int the resulting number cannot be represented and will wrap around back to -1 in Two's Complement. But after casting INT_MAX and INT_MIN to doubles, their difference will be representable with a larger data type and will not equal to -1.
+
+C.
+This will always yield 1 because even very large numbers or very small ones that round to 0 won't be affected by the parentheses. No casting is occuring in the expression. Even if one of the doubles is very close to 0 and does get rounded to 0, this will not change evaluation of the expression and they should be the same.
+
+D.
+The expression will always yield 1 because in the largest case where INT_MAX was converted into two doubles of dx, dy, or dz, no overflow would occur even when INT_MAX is squared and the third number multiplied to both sides will yield the same result. As for small numbers, any value close to zero will be rounded to zero regardless of the parentheses so both expressions will evaluate to 0 and 0 == 0, so the boolean expression will yield 1.
+
+E.
+The expression will not always yield 1. There are issues with dividing by 0. If the denominator of either expression is 0, this will yield that side to evaluate to positive or negative infinity which is not equal to what the other side will usually evaluate to, 1.
+
+2.89 
+float fpwr2(int x) {
+	/* Result exponent and fraction */ 
+	unsigned exp, frac;
+	unsigned u;
+  	if (x < -149) {
+    		/* Too small.  Return 0.0 */
+		exp = 0;
+		frac = 0;
+	} else if (x < -126) {
+    		/* Denormalized result */
+    		exp = 0;
+		frac = 1 << (x + 149);
+	} else if (x < 128) {
+    		/* Normalized result. */
+    		exp = x + 127;
+    		frac = 0;
+  	} else {
+    		/* Too big.  Return +oo */
+		exp = ~0;
+    		frac = 0;
+  	}
+	/* Pack exp and frac into 32 bits */
+	u = exp << 23 | frac;
+	/* Return as float */
+	return u2f(u);
+}

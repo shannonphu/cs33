@@ -1,0 +1,36 @@
+1.
+Trace 3 returned 4 in the %eax register when it should have returned a very large number since two large numbers were multipied. But this number would 
+have caused an overflow. Checking the pregression of the %eax register which shows the return value, it alternates between 0x7ffffffc and 0x4 or 0x2 
+mostly. The value gets changed to 0x4 or 0x2 by the instructions mov from something esp points to in memory or a cltd followed by an idiv instruction. 
+These along with a few other variations change the return value.
+
+2.
+Trace 3 was the most efficient by having 4 fewer lines of instructions than trace 1. It's instructions were pretty similar to those of trace 1, but was 
+only slightly more "efficient" because of small differences such as trace 3 having 2 fewer unconditional jmps than trace1. 
+
+3.
+Trace 2 was the least efficient because since the program was run with x86-64, there are more registers to keep track of thus more to modify and push or 
+pop off the stack. This difference made it have slightly more lines than the other programs running on the x86.
+
+4.
+536870911 is equivalent to 2^29 - 1. It is the most-positive-fixnum that Emacs lisp.h can handle for a 32-bit machine.
+
+5.
+There should be no problems because 37 times -26 would not result in any overflow since the result is equal to -962. -ftrapv would not have anything to 
+trap and the program should compile successfully. But when tried, the program actually returns 1. -ftrapv when put together with -O2 causes the function 
+to not trap like in the integer overflow portion of this lab. This is because some other function is called which doesnt make the program crash at 
+overflow.
+
+6.
+Because I am not expecting overflow, fwrapv should not cause any change in the return value of the arithmetic expression. There should not be any overflow 
+so nothing needs to be wraped around. But if there were, fwrapv would just make the answer wrap back around to the beginning of two's complement numbers. 
+When tried, the program returns 1 as well.
+
+7.
+If -fwrapv is used for integer multiplication, we can improve performance by returning the correct value instead of a wrapped around int if overflow 
+occurred. We can test for overflow first and if it does occur because of the operation, we can get T-min and add however much the number wrapped around 
+into a 64-bit number that could possibly be represented. Or we could use whatever was wrapped around and return that as by how much over T-min the number 
+is, assuming we are allowing overflow with fwrapv.
+
+8.
+The efficiency differences depending on line count is not very big. The lines are within the difference of a few lines.

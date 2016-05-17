@@ -1,0 +1,62 @@
+At first I tried to examine all files to understand what the code was doing exactly to aid in my
+optimizations, but eventually I realized that the main purpose of the lab was to utilize OpenMP
+to parallelize code to make it run faster. I looked up resources to learn how to use the OpenMP
+directives so I knew that I had to use things such as #pragma omp parallel and/or #pragma omp
+parallel for. I attempted to just put those above every for loop essentially, but this either
+would make the program take a very long time to complete or would even change the output. When
+I ran make check on those attempts, I very frequently got the message that my output was not
+correct and differed from the expected output. I knew using parallel in my directives caused
+this problem so I ended up changing all my #pragma omp parallel directives to  simply #pragma
+omp for, but this method did not yield any speed up at all and rather ocassionally slowed
+down my code. I took a look at the code profile by doing make seq GPROF=1 to examine which function
+of the 5 was taking the most time and found that func01 was taking up the most time. So I tried
+to spend more of my efforts in parallelizing that function. So in the largest for loop which
+had 2 for loops nested within, I tried to parallelize that larger for loop with #pragma omp
+parallel for. This did not work out well as it changed the output of my program. I read on
+Piazza that the concept of shared and private could be useful in the case of race conditions
+so I applied that to variables related to those loops. This actually worked and caused about
+a 5.5x speed-up of func.c. I was working on lnxsrv05. To make sure my results were valid, I ran make
+check again to ensure that my output was correct to the original program and I also ran
+make checkmem to check for memory leaks. I got a list of memory leaks, but as from a certain
+Piazza post, many others were also getting these memory leaks as well. To get an average reading
+of func.c's speed up, I ran the timing script provided by a TA. I did python esttime.py ./seq 10
+resulting in an output:
+
+Running './seq' 10 times...
+  [i=1/10]: FUNC_TIME: 0.599119
+  [i=2/10]: FUNC_TIME: 0.599215
+  [i=3/10]: FUNC_TIME: 0.599601
+  [i=4/10]: FUNC_TIME: 0.599722
+  [i=5/10]: FUNC_TIME: 0.599958
+  [i=6/10]: FUNC_TIME: 0.599622
+  [i=7/10]: FUNC_TIME: 0.599117
+  [i=8/10]: FUNC_TIME: 0.599581
+  [i=9/10]: FUNC_TIME: 0.599353
+  [i=10/10]: FUNC_TIME: 0.599618
+==== Statistics (in seconds) ====
+Mean: 0.5994906 Std: 0.000264276067778 Median: 0.599591
+  (Min: 0.599117 Max: 0.599958)
+min(mean, median) = 0.5994906
+Done.
+
+Then I did python esttime.py ./omp 10 which output:
+Running './omp' 10 times...
+  [i=1/10]: FUNC_TIME: 0.113473
+  [i=2/10]: FUNC_TIME: 0.113811
+  [i=3/10]: FUNC_TIME: 0.113355
+  [i=4/10]: FUNC_TIME: 0.113626
+  [i=5/10]: FUNC_TIME: 0.113794
+  [i=6/10]: FUNC_TIME: 0.120816
+  [i=7/10]: FUNC_TIME: 0.11271
+  [i=8/10]: FUNC_TIME: 0.113774
+  [i=9/10]: FUNC_TIME: 0.113905
+  [i=10/10]: FUNC_TIME: 0.113949
+==== Statistics (in seconds) ====
+Mean: 0.1143213 Std: 0.00219235280236 Median: 0.113784
+  (Min: 0.11271 Max: 0.120816)
+min(mean, median) = 0.113784
+Done.
+
+The mean omp func.c time was 0.1143 seconds while seq time was 0.599 seconds.
+If I divide seq's time by omp's time, I get that there was a speed-up of 5.24
+times.

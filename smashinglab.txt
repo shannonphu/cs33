@@ -1,0 +1,357 @@
+2.
+To apply the patch to the 32-bit sthttpd, I looked at the changes displayed in 
+the code at the top of the lab instruction webpage and manually changed the 
+char line[10000] to char line[1000] and while ( fgets( line, sizeof(line), fp 
+) != (char*) 0 ) into while ( fgets( line, 1000, fp ) != (char*) 0 ). Then I 
+configured it with the provided shell command. 
+Since I now had to compile the source code for strong stack protection, I did 
+the command 'make clean' then typed the command "make CFLAGS='-m32 -g3 -O2 -
+fno-inline -fstack-protector-strong'" to create my executable which I renamed 
+as src/thttpd-sp. 
+
+I then did the command 'make clean' again to ensure a clean build. I repeated 
+the previous process to make an executable for address sanitization.
+make CFLAGS='-m32 -g3 -O2 -fno-inline -fsanitize=address'
+mv src/thttpd src/thttpd-as
+
+make CFLAGS='-m32 -g3 -O2 -fno-inline'
+mv src/thttpd src/thttpd-as
+
+3.
+To prepare for starting a SEASNet server I calculated my port number. For SP, 
+my port number is 13153. For AS, my port number is 13154 and for NO 13155. 
+I also made a test file to verify of my server works which just printed out a 
+statement as a test. I did the command 'src/thttpd-sp -p 13153' which returned 
+without doing anything. To check that my server was working, I did 'ps -u 
+shannon' which printed out:
+
+  PID TTY          TIME CMD
+ 5385 ?        00:00:00 thttpd-sp
+ 5391 ?        00:00:00 thttpd-as
+ 5400 ?        00:00:00 thttpd-no
+22763 ?        00:00:02 sshd
+22768 ?        00:00:00 sshd
+22770 ?        00:00:00 sftp-server
+22783 pts/2    00:00:00 bash
+22826 pts/2    00:00:00 dbus-launch
+22828 ?        00:00:00 dbus-daemon
+23035 pts/2    00:00:00 ps
+
+4.
+Then I did 'curl http://localhost:13153/test.txt' to run my test text file to 
+make sure that the server could run the test file.
+
+To kill the server, I did 'kill -s 15 ' and the number fo the server which I 
+found in the print-out from command 'ps -u shannon'. 
+
+5.
+/*It was confusing how I would run the program on GDB and how to crash it so I 
+tried changing my test text file into something really long, over 1000 random 
+characters and configure that with each thttpd file I made earlier.
+
+I tried src/thttpd-sp -C testfile.txt -p 13151 which did not work.
+
+gdb src/thttpd-no to start GDB with the executable
+run -p [PORT-NUM] -D -C [CONFIG_FILE] to run the executable with my test file 
+with over 100 characters in it.
+For SP the program exited with code 01
+
+But after running the executables many times with my test file, none of the 
+executables crashed. So I changed around whatever I input into my text file, 
+referring to the source code and trying to find a loophole which would let me 
+be able to cause a buffer overflow. I tried to put many repititions of one of 
+the configuration words that would cause the program to enter one of the if 
+statements instead of the else, but then I was told 'value required for user 
+option'. I kept getting these errors until I entered a value for the configuration
+ option after an equal sign. This make my test file of the form 'config 
+ option=junk letters and values over 100 characters'. */
+
+After much trial and error with my config files, I looked at read_config to
+ find out what I should put in it. My config file eventually contained 
+ user=shajijafknjknjksnkjnsfjknfksnkjnsjknfjijafknjknjksnkjnsfjknfksnkjnsjknf...
+  that went beyond 100 characters to cause a buffer overflow.
+
+When using my test file for SP, the crash error I got was:
+*** stack smashing detected ***: /w/home.02/cs/ugrad/shannon/Desktop/smashlab/sthttpd-2.27.0/src/thttpd-sp terminated
+Program received signal SIGSEGV, Segmentation fault.
+
+Upon finding a backtrace, I typed 'backtrace' and the last line of it, where 
+the crash occured, read "#6  0x0804b69f in read_config (filename=<optimized out>) at thttpd.c:1190".
+
+Because the line given to be in the backtrace did not give me an significant 
+information as to where and why the program crashed, I stepped through the 
+program using GDB and found that ret crashes the program. This is because 
+-fstack-protector-strong creates a canary at the end of the buffer for protection 
+against buffer overflow and checks if the canary value has been 
+ changed/destroyed upon the program's return. It will abort the program which is what 
+ happened during the ret instruction of read_config. 
+
+6.
+As for AS, using the same test file from earlier, the following crash error message printed:
+
+==26894==ERROR: AddressSanitizer: stack-buffer-overflow on address 0xffffc104 at 
+pc 0x2d6ed1 bp 0xffffc058 sp 0xffffc03c
+READ of size 1000 at 0xffffc104 thread T0
+*/
+
+Program received signal SIGSEGV, Segmentation fault.
+uw_frame_state_for (context=context@entry=0xffffb970, fs=fs@entry=0xffffb9f0) 
+at ../../../../gcc-4.9.2/libgcc/unwind-dw2.c:1253
+1253    ../../../../gcc-4.9.2/libgcc/unwind-dw2.c: No such file or directory.
+
+
+When backtracing I was notified that line 1018 was what crashed the program which was 
+'if ( ( cp = strchr( line, '#' ) ) != (char*) 0 )'. When checking the assembly code for 
+this line of code, I noticed that more memory on the stack was allocated after the buffer
+ read in over 100 characters and then a value was pushed onto the stack. Because the 
+ address sanitizer checks for memory errors and detected the stack overflow, the program
+  crashed at the instruction push by recognizing that there was an out-of-bounds write to the stack.
+
+/*
+Because the backtrace gave me the line 1018, I went and checked that, but it 
+turned out to be the part of the program that trims comments: 
+'	if ( ( cp = strchr( line, '#' ) ) != (char*) 0 )'. 
+The address sanitizer checks for memory errors and detected the stack overflow 
+maybe by recognizing that there was an out-of-bounds access to the stack. The 
+instruction that most likey caused the crash was the ret instruction since the 
+program was supposed to jump back to the return address of the previous function
+ frame, but since that was overwritten, the address sanitizer recognized that
+  buffer overflow had occured and crashed the program. */
+
+7.
+As for NO, the following error output:
+Program received signal SIGSEGV, Segmentation fault.
+0x73007265 in ?? ()
+
+Its backtrace gave no valuable information showing me that all memory locations were '??'s.
+/*
+#0  0x73007265 in ?? ()
+#1  0x75006168 in ?? ()
+#2  0x00726573 in ?? ()
+#3  0x00616873 in ?? ()
+#4  0x72657375 in ?? ()
+#5  0x61687300 in ?? ()
+#6  0x65737500 in ?? ()
+#7  0x68730072 in ?? ()
+#8  0x73750061 in ?? ()
+#9  0x73007265 in ?? ()
+#10 0x75006168 in ?? ()
+#11 0x00726573 in ?? ()
+#12 0x00616873 in ?? ()
+#13 0x72657375 in ?? ()
+#14 0x61687300 in ?? ()
+#15 0x65737500 in ?? ()
+#16 0x68730072 in ?? ()
+#17 0x73750061 in ?? ()
+#18 0x73007265 in ?? ()
+#19 0x75006168 in ?? ()
+#20 0x00726573 in ?? ()
+#21 0x00616873 in ?? ()
+#22 0x72657375 in ?? ()
+#23 0x61687300 in ?? ()
+#24 0x65737500 in ?? ()
+#25 0x68730072 in ?? ()
+#26 0x73750061 in ?? ()
+#27 0x73007265 in ?? ()
+#28 0x75006168 in ?? ()
+#29 0x00726573 in ?? ()
+#30 0x00616873 in ?? ()
+#31 0x72657375 in ?? ()
+#32 0x61687300 in ?? ()
+#33 0x65737500 in ?? ()
+#34 0x68730072 in ?? ()
+#35 0x73750061 in ?? ()
+#36 0x73007265 in ?? ()
+#37 0x75006168 in ?? ()
+#38 0x00726573 in ?? ()
+#39 0x00616873 in ?? ()
+#40 0x72657375 in ?? ()
+#41 0x61687300 in ?? ()
+*/
+
+When stepping through the program with GDB, upon return, the following 
+error was displayed:
+     0x61616161:  Cannot access memory at address 0x61616161
+This occurred at the instruction ret of function read_config and doing 
+another step in the function led to the error:
+     Program received signal SIGSEGV, Segmentation fault.
+     0x61616161 in ?? ()
+     => 0x61616161:  Cannot access memory at address 0x61616161
+     
+This occurred because the return address was overwritten by the program 
+and thus when the program tried to jump to the return address during the
+ instruction ret upon finishing the program, that address was invalid 
+ and did not exist, thus crashing the program.
+
+8.
+To generate the assembly code, I used the commands: 
+   gcc -I .. -I . -m32 -g3 -O2 -fno-inline -fstack-protector-strong thttpd.c -o thttpd-sp.s
+   gcc -I .. -I . -m32 -g3 -O2 -fno-inline -fsanitize=address thttpd.c -o thttpd-no.s   
+   gcc -I .. -I . -m32 -S -O2 -fno-inline thttpd.c -o thttpd-no.s
+
+When comparing their assembly-level implementations of handle_read, I found 
+that the SP and NO assembly blocks are the same. This could be the case because
+ in handle_read, no new arrays are created, so no canaries are placed in that
+  frame. This makes it the same as NO's implementation. As for AS, the assembly
+   code is different. It contains many shr instructions while the other two
+    assembly language files don't use that instruction in handle_read. Also
+     NO's assembly code for handle_read does not invoke the instruction 'call'
+      wheras AS and SP do. This makes me think that NO may have some kind of
+       tail optimization where it tries to save stack memory by not pushing 
+       a new stack onto its frame for a function call. 
+
+In handle_read, -fstack-protector-strong does not really do anything since 
+there are no arrays declared in the scope of that function, so no canaries 
+are placed because there are no buffers.
+
+-fsanitize=address  prevents buffer overflow by checking addresses in memory 
+and checking if any bytes were "poisoned" or not. "Poisoned" means a corresponding
+ shadow memory to a main memory value was written with something else. In 
+ handle_read, the address sanitizer might have taken a role in the checking
+  of whether there was room in the buffer to read more bytes or not.
+
+
+9.
+All of my attempts at this part of the lab were done on linux server number 5.
+
+When I first tried out the hex2raw executable on my test file, by doing:
+     cat src/testfile.txt| ./hex2raw > rawtest.txt
+the following output:
+    Invalid hex value [asdfg]. Please specify only single byte hex values
+     separated by whitespace.
+I repeatedly kept getting these kind of errors until trying something similar
+ to aa bb cc etc in which I was able to pass the file through hex2raw.
+I knew that I had to somehow invoke the unlink() method on a file named
+ target.txt, so I wrote a C program to do that, but I could not get the 
+ assembly for it because I was unsure about how to call unlink(). Eventually
+  I tried to get the address of unlink() relative to the beginning of the library 
+  it is in.
+
+I set a breakpoint at unlink which gave me its unchanging address on GDB:
+            "Breakpoint 1, 0x0037fd20 in unlink () from /lib/libc.so.6"
+I also found the base address of the library libc which is the first address in the
+range given below: 
+002ac000-0043c000 r-xp 00000000 08:02 393295                             /lib/libc-2.12.so
+0043c000-0043d000 ---p 00190000 08:02 393295                             /lib/libc-2.12.so
+0043d000-0043f000 r--p 00190000 08:02 393295                             /lib/libc-2.12.so
+0043f000-00440000 rw-p 00192000 08:02 393295                             /lib/libc-2.12.so
+
+At this point, I attempted to find the relative address of unlink when compared to the 
+library so that I could deal with stack randomization.
+The distance between unlink and the base of its library is the difference
+ between 0x002ac000 and 0x0037fd20 which happens to be 0x000d3d20. After
+  finding the address of unlink, I can directly call it by putting that 
+  address into the return address of my config file to force the program 
+  to jump to that address and "unlink" target.txt. To do this, I tried to set 
+  up a config file similar to the ones in the previous parts where i have 
+   a "config_option=" with some bytes of hex values separated by a space 
+
+To successfully exploit the program, I had to give a valid config option and 
+value after the equal sign that would pass without giving a segmentation fault 
+or other crash or else the exploit would not go through completely. To do this
+ but also overflow the buffer, undetected, I put the raw bytes of the unlink 
+ function after a comment following a '#'. To pass in 'target.txt' as a parameter
+  I would have to also put a pointer and string onto the stack so that unlink 
+  would know at which address to 'unlink' the file at. The idea was to simulate
+   a new call stack by passing in an address as a parameter onto the stack 
+   before unlink was called. When 'calling' unlink, have it act on an address 
+   on the stack which I found by disassembling unlink():
+
+disas for unlink():
+   0x0037fd20 <+0>:     mov    %ebx,%edx
+   0x0037fd22 <+2>:     mov    0x4(%esp),%ebx
+   0x0037fd26 <+6>:     mov    $0xa,%eax
+   0x0037fd2b <+11>:    call   *%gs:0x10
+   0x0037fd32 <+18>:    mov    %edx,%ebx
+   0x0037fd34 <+20>:    cmp    $0xfffff001,%eax
+   0x0037fd39 <+25>:    jae    0x37fd3c <unlink+28>
+   0x0037fd3b <+27>:    ret
+   0x0037fd3c <+28>:    call   0x3d1048 <__i686.get_pc_thunk.cx>
+   0x0037fd41 <+33>:    add    $0xbf2b3,%ecx
+   0x0037fd47 <+39>:    mov    -0x28(%ecx),%ecx
+   0x0037fd4d <+45>:    xor    %edx,%edx
+   0x0037fd4f <+47>:    sub    %eax,%edx
+   0x0037fd51 <+49>:    mov    %edx,%gs:(%ecx)
+   0x0037fd54 <+52>:    or     $0xffffffff,%eax
+   0x0037fd57 <+55>:    jmp    0x37fd3b <unlink+27>
+
+The instruction that takes the parameter on the stack is the second line of 
+unlink's assembly code which moves something from an offset of 4 from %esp into %ebx.
+
+To try running the program with just this, I did 
+gdb --args src/thttpd-no -p 50000 -D -C myexploit.cfg
+
+To pass the file target.txt in as a parameter, I would have to place a pointer 
+to the address of target.txt at 0x4(%esp) so that unlink could use it. First, 
+I just made a C program that called unlink on the file target.txt which was 
+in the current working directory. This was done by doing:
+int main() {
+    unlink("././././././target.txt");
+}
+
+This successfully removed target.txt from my directory, so now I had to somehow 
+incorporate this into my exploit file.
+I was not quite sure how to do this at first either so I basically filled all 
+100 characters of the array and did a '#' followed by the raw bytes.
+I knew that target.txt had to be passed in as a parameter before unlink was called, 
+and that I needed a NOP sled for randomization.
+
+Eventually after imagining the layout of the stack, my config file looked like:
+	"debug=#'t' 'a' 'r' 'g' 'e' 't' '.' 't' 'x' 't' 90 90 90 90 90 90 90 90 90 
+  90 90 90 90 90 90 90 90...90 [address of unlink as found above]".
+This did not seem to work when I ran it either.
+
+After asking a TA, I realized that since I was on GDB at the time, I did not need 
+the NOP sled so I left that part out since GDB disables stack randomization.
+
+My next attempt used the following as my config file:
+max_age=000aaaaa000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaa00000000000000000000000000000000000000000000000000000000000000000000000000
+000././././././././././././././././././././././././target.txt[direct address of unlink]
+The direct address was found to be 0x0037fd20 from setting a breakpoint as found above
+which I passed into hex2raw to convert into raw bytes.
+
+Examining the stack memory when running tthtdh-no on gdb, I found that char 
+line[100] begins at address 0xffffc244, so the buffer ends 100 bytes later at 
+0xffffc2a8. When setting a breakpoint at unlink to check if unlink was called 
+in my exploit program, it seemed to have been entered at address 0x0037fd20 
+which is the same address as unlink in memory. So then I thought that my program 
+was able to enter unlink and I started to deal with passing in target.txt correctly.
+
+I tried looking at the memory on the stack before the crash, but eventually could find
+no solution as to why my program was not running. I eventually took on a different 
+approach.
+
+My new config file was:
+dir=000000000000111111111111111111112222222222222222333333333333333333
+3333333333333333333333333333333333333444444444444444444444[rawbytes that dont 
+show up on this text-editor]00000./././././././././././././././target.txt
+
+where I used remove instead of unlink this time. I successfully overwrote
+ %eip right before the crash (right after read_config returned, at the 
+ first instruction of remove) so that eip would move to remove() after
+ the return of read_config. 
+
+I received the following message:
+Program received signal SIGSEGV, Segmentation fault.
+0x0030a696 in remove () from /lib/libc.so.6
+
+Continuing to see how far into remove I would get into, I got the following message:
+(gdb) continue
+Continuing.
+
+Program terminated with signal SIGSEGV, Segmentation fault.
+The program no longer exists.
+
+
+The error occurred at after trying to complete the first instruction of remove(). 
+My program successfully entered remove, but when getting the register information, 
+I noticed ebx was overwritten with my junk values as were many other registers
+so I thought that the junk values were invalid, inaccessible memory addresses.
+I attempted to put contrived junk values that would make %ebx a valid memory 
+location. Eventually I was able to put './target.txt' into ebx up until the point 
+where the program crashes.
+
+
+
+

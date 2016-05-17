@@ -1,0 +1,25 @@
+With -O2, the function returns 0, for -O2 -ftrapv the function 
+returns 1, and for -O2 fwrapv the function returns 1. The 
+function returns 0 if there was overflow and 1 is there was no 
+overflow. For -O2 the assembly language is the shortest, 
+basically doing an xor operation comparing register %eax with 
+itself and returning the result. 
+
+-O2 returned 0 because when INT_MAX was xor'ed with INT_MAX, the 
+bits would always end up representing 0. This would be the case 
+for any number since bits xor'ed with the same bit pattern will 
+always result in 0. I suppose the compiler knew that overflow 
+would occur and automatically optimaized so that the function 
+would return 0.
+
+-O2 -ftrapv returned 1. -ftrapv should have stopped the program
+before overflow occurred but it did not. The difference between 
+this case and the other two was that INT_MAX was subtracted by -1 
+rather than being added by 1. This may have caused -ftrapv to not 
+trap the program.
+
+-O2 -fwrapv returned 1 because when overflow occurs, the compiler 
+wraps the result around as if it were two's complement so that 
+the resulting value will become -1 in two's complement which is 
+smaller than INT_MIN thus the program returns 1. The assembly 
+language for this was of medium length relative to the other two.

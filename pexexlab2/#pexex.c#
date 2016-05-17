@@ -1,0 +1,7 @@
+12;rgb:0000/0000/0000#include <limits.h>
+  int big = INT_MAX;
+  int
+  testovf (void)
+  {
+    return big + 1 < big;
+  }
